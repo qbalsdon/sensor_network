@@ -3,6 +3,7 @@
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
+#include <ESP8266HTTPClient.h>
 
 #include "constants.h"
 
@@ -12,11 +13,16 @@
 #define RED_PIN D4
 
 #define COLOUR_COUNT 10
+#define INT_MAX 214748364
 
 String colours[COLOUR_COUNT] = { "e6194b", "3cb44b", "ffe119", "0082c8", "f58231", "911eb4", "46f0f0", "d2f53c", "fabebe", "e6beff" };
-int colourIndex = 0;
+String colour = "";
+long count;
+double average;
 
+ESP8266WebServer server(80);
 OneWire ds(DS18S20_Pin);
+HTTPClient http;
 
 void setup() {
   Serial.begin(115200);
@@ -28,6 +34,101 @@ void setup() {
   pinMode(BLUE_PIN, OUTPUT);
 
   digitalWrite(LED_BUILTIN, LOW);
+  String ipAddress = setupServer();
+  Serial.println("Registering device on SensorNetwork");
+  unsigned char mac[6];
+  WiFi.macAddress(mac);   
+  registerDevice(mac, ipAddress);
+  setColour(colour);
+  count = 0;
+  average = 0;
+}
+
+String setupServer() {
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  Serial.println("");
+
+  // Wait for connection
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.print("Connected to ");
+  Serial.println(WIFI_SSID);
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  if (MDNS.begin("esp8266")) {
+    Serial.println("MDNS responder started");
+  }
+
+  server.on("/", handleRoot);
+  server.on("/reset", handleReset);
+  server.on("/average", handleAverage);
+
+  server.onNotFound(handleNotFound);
+
+  server.begin();
+  Serial.println("HTTP server started");
+
+  return WiFi.localIP().toString();
+}
+
+String getInterpolatedColour(float difference) {
+  if (difference < 0) {
+    difference = 0;
+  }
+  if (difference > 100) {
+    difference = 100;
+  }
+  //BLUE - COLD!
+  int r1 = 18;
+  int g1 = 228;
+  int b1 = 232;
+
+  //RED - HOT!
+  int r2 = 232;
+  int g2 = 18;
+  int b2 = 68;
+
+  int rValue = r1 + ((r2 - r1) * (difference / 100.0));
+  int gValue = g1 + ((g2 - g1) * (difference / 100.0));
+  int bValue = b1 + ((b2 - b1) * (difference / 100.0));
+
+  return String(rValue, HEX) + String(gValue, HEX) + String(bValue, HEX);
+}
+
+void handleRoot() {
+  float temperature = getTemperature();  
+  String colour = getInterpolatedColour(temperature);
+  String result="<html> <head> <style> html{ background:-webkit-radial-gradient(circle, #ffffff 0%,#"+getInterpolatedColour(temperature )+" 100%); height:100%; width:100%; } /* Thermometer column and text */ .thermometer{ margin-top: 30px; margin-left: 50%; left: -11px; width:22px; height:150px; display:block; font:bold 14px/152px helvetica, arial, sans-serif; text-indent: 36px; background: -webkit-linear-gradient(top, #fff 0%, #fff 50%, #db3f02 80%, #db3f02 100%); border-radius:22px 22px 0 0; border:5px solid #4a1c03; border-bottom:none; position:absolute; box-shadow:inset 0 0 0 4px #fff; color:#4a1c03; } /* Thermometer Bulb */ .thermometer:before{ content:' '; width:44px; height:44px; display:block; position:absolute; top:142px; left:-16px; z-index:-1; /* Place the bulb under the column */ background:#db3f02; border-radius:44px; border:5px solid #4a1c03; box-shadow:inset 0 0 0 4px #fff; } /* This piece here connects the column with the bulb */ .thermometer:after{ content:' '; width:14px; height:7px; display:block; position:absolute; top:146px; left:4px; background:#db3f02; } </style> <body> <script> var w = window.innerWidth; var h = window.innerHeight; setTimeout(function(){ window.location.reload(1); }, 1000 * 60 * 2); </script> <span class='thermometer'>" + String(temperature) + "&deg;C</span> </body> </html>";
+  server.send(200, "text/html", result);
+}
+
+void handleReset() {
+  average = 0;
+  count = 0;
+  server.send(200, "text/html", "Success");
+}
+
+void handleAverage() {
+  server.send(200, "text/html", String(average));
+}
+
+void handleNotFound(){
+  String message = "File Not Found\n\n";
+  message += "URI: ";
+  message += server.uri();
+  message += "\nMethod: ";
+  message += (server.method() == HTTP_GET)?"GET":"POST";
+  message += "\nArguments: ";
+  message += server.args();
+  message += "\n";
+  for (uint8_t i=0; i<server.args(); i++){
+    message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
+  }
+  server.send(404, "text/plain", message);
 }
 
 void setColour(int red, int green, int blue)
@@ -61,7 +162,7 @@ void setColour(String hex)
   setColour(hexToInt(redString), hexToInt(greenString), hexToInt(blueString));
 }
 
-float getTemp(){
+float getTemperature(){
  //returns the temperature in Celsius
 
  byte data[12];
@@ -107,17 +208,41 @@ float getTemp(){
  return TemperatureSum;
 }
 
-void loop() {
-  
-  //float temperature = getTemp();
-  //String temp = String(temperature);
-  //Serial.print("TEMPERATURE: ");
-  //Serial.println(temp);
-  //delay(250);  
-  setColour(colours[colourIndex]);
-  colourIndex = (colourIndex + 1) % COLOUR_COUNT;
-  delay(1000);
+String macToStr(const uint8_t* mac) {
+  String result;
+  for (int i = 0; i < 6; ++i) {
+    result += String(mac[i], 16);
+    if (i < 5)
+      result += ':';
+  }
+  return result;
+}
 
-  Serial.println(WIFI_SSID);
+//https://techtutorialsx.com/2016/07/17/esp8266-http-get-requests/
+void registerDevice(unsigned char deviceMacAddress[6], String ipAddress) {  
+  String url = "http://" + HOST_ADDRESS + ":" + HOST_PORT + "/register?mac=" + macToStr(deviceMacAddress) + "&ip=" + ipAddress;
+  Serial.println("URL: " + url);
+  http.begin(url);  //Specify request destination
+  int httpCode = http.GET(); //Send the request
+  if (httpCode > 0) {      //Check the returning code      
+    String payload = http.getString();   //Get the request response payload
+    Serial.println("PAYLOAD: " + payload);             //Print the response payload
+    colour = payload;
+  } else {
+    Serial.println("HTTP response code: " + String(httpCode));
+  }
+  http.end();   //Close connection  
+}
+
+void updateAverage(float temperature) {
+  count = (count % INT_MAX) + 1;
+  average -= average / count;
+  average += temperature / count;
+}
+
+void loop() {
+  server.handleClient();
+  updateAverage(getTemperature());
+  delay(10);   
 }
 
