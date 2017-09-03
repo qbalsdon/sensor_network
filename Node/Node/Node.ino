@@ -19,6 +19,8 @@ String colours[COLOUR_COUNT] = { "e6194b", "3cb44b", "ffe119", "0082c8", "f58231
 String colour = "";
 long count;
 double average;
+String macAddr;
+boolean registered = false;
 
 ESP8266WebServer server(80);
 OneWire ds(DS18S20_Pin);
@@ -33,15 +35,31 @@ void setup() {
   pinMode(GREEN_PIN, OUTPUT);
   pinMode(BLUE_PIN, OUTPUT);
 
-  digitalWrite(LED_BUILTIN, LOW);
+  for (int i = 0; i < 20; i++) {
+      digitalWrite(LED_BUILTIN, i % 2 == 0);
+      delay(100);
+  }
   String ipAddress = setupServer();
   Serial.println("Registering device on SensorNetwork");
   unsigned char mac[6];
-  WiFi.macAddress(mac);   
-  registerDevice(mac, ipAddress);
+  WiFi.macAddress(mac);  
+  macAddr = macToStr(mac);
+  boolean high = true;
+  while(!registered) { 
+    digitalWrite(LED_BUILTIN, high);
+    high = !high;
+    registerDevice(macAddr, ipAddress);
+    delay(1000);
+  }
+  
   setColour(colour);
   count = 0;
   average = 0;
+  for (int i = 0; i < 20; i++) {
+      digitalWrite(LED_BUILTIN, i % 2 == 0);
+      delay(100);
+  }
+  digitalWrite(LED_BUILTIN, LOW);
 }
 
 String setupServer() {
@@ -49,8 +67,11 @@ String setupServer() {
   Serial.println("");
 
   // Wait for connection
+  boolean high = true;
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
+    digitalWrite(LED_BUILTIN, high);
+    high = !high;
     Serial.print(".");
   }
   Serial.println("");
@@ -113,7 +134,9 @@ void handleReset() {
 }
 
 void handleAverage() {
-  server.send(200, "text/html", String(average));
+  server.send(200, "text/html", "{\"average\": " + String(average) + ", \"mac\": \"" + macAddr + "\"}");
+  average = 0;
+  count = 0;
 }
 
 void handleNotFound(){
@@ -219,8 +242,8 @@ String macToStr(const uint8_t* mac) {
 }
 
 //https://techtutorialsx.com/2016/07/17/esp8266-http-get-requests/
-void registerDevice(unsigned char deviceMacAddress[6], String ipAddress) {  
-  String url = "http://" + HOST_ADDRESS + ":" + HOST_PORT + "/register?mac=" + macToStr(deviceMacAddress) + "&ip=" + ipAddress;
+void registerDevice(String deviceMacAddress, String ipAddress) {  
+  String url = "http://" + HOST_ADDRESS + ":" + HOST_PORT + "/register?mac=" + deviceMacAddress + "&ip=" + ipAddress;
   Serial.println("URL: " + url);
   http.begin(url);  //Specify request destination
   int httpCode = http.GET(); //Send the request
@@ -228,7 +251,10 @@ void registerDevice(unsigned char deviceMacAddress[6], String ipAddress) {
     String payload = http.getString();   //Get the request response payload
     Serial.println("PAYLOAD: " + payload);             //Print the response payload
     colour = payload;
+    registered = true;
   } else {
+    registered = false;
+    colour = "550000";
     Serial.println("HTTP response code: " + String(httpCode));
   }
   http.end();   //Close connection  
