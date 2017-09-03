@@ -1698,6 +1698,7 @@
       "version": "0.5.1"
     },
     "mongodb": "^2.2.31",
+    "mongoose": "^4.11.9",
     "ms": {
       "integrity": "sha1-VgiurfwAvmwpAd9fmGF4jeDVl8g=",
       "resolved": "https://registry.npmjs.org/ms/-/ms-2.0.0.tgz",
