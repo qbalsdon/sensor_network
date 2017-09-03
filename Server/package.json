@@ -1335,6 +1335,7 @@
       "resolved": "https://registry.npmjs.org/has-ansi/-/has-ansi-2.0.0.tgz",
       "version": "2.0.0"
     },
+    "http": "0.0.0",
     "http-errors": {
       "integrity": "sha1-CgAsyFcHGSp+eUbO7cERVfYOxzY=",
       "requires": {
