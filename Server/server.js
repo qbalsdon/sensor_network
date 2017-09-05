@@ -16,6 +16,7 @@ var url = 'mongodb://localhost:27017/sensornet';
 mongoose.connect(url);
 
 var app = express();
+app.use("/images", express.static(__dirname + '/images'));
 app.use("/scripts", express.static(__dirname + '/scripts'));
 app.use(bodyParser.urlencoded({extended: true}));
 
@@ -47,22 +48,55 @@ app.get('/', function(req, res) {
 });
 
 app.get('/data', function (req, res) {
+  console.log("Getting data");
   // do something with db
   var start = new Date();
   var end = new Date();
-  start.setHours(start.getHours() - 1);
-  Temperature.find({$and:[{timeStamp:{$lte:end}},{timeStamp:{$gte:start}}]}, function(err, dataList) {
-    if (err) res.status(500).send("Internal error: " + err);
-    else {
-      res.status(200).send(dataList);
-    }
+  start.setDate(4);
+  start.setFullYear(2017);
+  start.setMonth(8);
+  start.setHours(8);
+  start.setMinutes(0);
+  start.setSeconds(0);
+
+  end.setDate(4);
+  end.setFullYear(2017);
+  end.setMonth(8);
+  end.setHours(18);
+  end.setMinutes(0);
+  end.setSeconds(0);
+  /*
+  Temperature.find({}, function(err, dataList) {
+      console.log(JSON.stringify(dataList));
+  });
+  */
+  Device.find({}, function(err, deviceList) {
+     if(err) res.status(500).send("Internal error: " + err);
+     else {
+       Temperature
+          .find({})
+          .where('timeStamp').gte(start).lte(end)
+          .sort({mac:1, timeStamp:1})
+          .exec(
+              function(err, dataList) {
+                  if (err) res.status(500).send("Internal error: " + err);
+                  else {
+                      res.status(200).send({devices: deviceList, data: dataList});
+                  }
+              }); 
+     }
   });
 });
 
 app.get('/clear', function (req, res) {
-  //Device.remove({}, function(err) {
-  // res.status(202).send("You called it");
-  //});
+  /*
+  Temperature.remove({}, function(err) {
+   console.log("Temp cleared!");
+  });
+  Device.remove({}, function(err) {
+   res.status(202).send("You called it");
+  });
+ */
 });
 
 app.get('/register', function (req, res) {
@@ -170,7 +204,7 @@ function readNode() {
 function saveElement(dataPoint) {
     dataPoint.timeStamp = timeStamp;
     console.log("        Saving: " + JSON.stringify(dataPoint));
-    var temperature = new Temperature({ mac: dataPoint.mac, temperature: dataPoint.temperature, timeStamp: dataPoint.timeStamp });
+    var temperature = new Temperature({ mac: dataPoint.mac, temperature: dataPoint.average, timeStamp: dataPoint.timeStamp });
     temperature.save(function (err, deviceInstance) {
       if (err) {
         console.error("Save temperature error: " + err);
