@@ -48,28 +48,18 @@ app.get('/', function(req, res) {
 });
 
 app.get('/data', function (req, res) {
-  console.log("Getting data");
-  // do something with db
   var start = new Date();
   var end = new Date();
-  start.setDate(4);
-  start.setFullYear(2017);
-  start.setMonth(8);
-  start.setHours(8);
-  start.setMinutes(0);
+  /*start.setHours(7);
+  start.setMinutes(30);
   start.setSeconds(0);
 
-  end.setDate(4);
-  end.setFullYear(2017);
-  end.setMonth(8);
   end.setHours(18);
   end.setMinutes(0);
   end.setSeconds(0);
-  /*
-  Temperature.find({}, function(err, dataList) {
-      console.log(JSON.stringify(dataList));
-  });
   */
+  start.setDate(1);
+ 
   Device.find({}, function(err, deviceList) {
      if(err) res.status(500).send("Internal error: " + err);
      else {
@@ -224,13 +214,13 @@ app.listen(3000, function () {
    console.log("DB temperatures cleared");
   });
   */
-  /*
+  
   Device.count({}, function( err, count){
     var index = count;
     console.log("There are " + count + " devices");
     if ((count) >= NUM_NODES) nodesConnected();
   });
-  */
+  
   Temperature.count({}, function( err, count){
     var index = count;
     console.log("There are " + count + " temperature entries");
