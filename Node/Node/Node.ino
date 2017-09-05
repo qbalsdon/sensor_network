@@ -21,6 +21,8 @@ long count;
 double average;
 String macAddr;
 boolean registered = false;
+int blinkCount = 0;
+int blinkOn = false;
 
 ESP8266WebServer server(80);
 OneWire ds(DS18S20_Pin);
@@ -87,6 +89,8 @@ String setupServer() {
   server.on("/", handleRoot);
   server.on("/reset", handleReset);
   server.on("/average", handleAverage);
+  server.on("/temperature", handleTemperature);
+  server.on("/blink", handleBlink);
 
   server.onNotFound(handleNotFound);
 
@@ -137,6 +141,15 @@ void handleAverage() {
   server.send(200, "text/html", "{\"average\": " + String(average) + ", \"mac\": \"" + macAddr + "\"}");
   average = 0;
   count = 0;
+}
+
+void handleTemperature() {
+  server.send(200, "text/html", "{\"temperature\": " + String(average) + "}");
+}
+
+void handleBlink() {  
+  blinkCount = 2000;
+  server.send(200, "text/html", "Blinking!");
 }
 
 void handleNotFound(){
@@ -269,6 +282,18 @@ void updateAverage(float temperature) {
 void loop() {
   server.handleClient();
   updateAverage(getTemperature());
-  delay(10);   
+
+  if (blinkCount > 0) {
+    blinkCount = blinkCount - 10;
+    if (blinkCount % 50 == 0) {
+      setColour(colour);
+    } else {
+      setColour("000000");
+    }
+  } else {
+    setColour(colour);
+  }
+  
+  delay(10); 
 }
 
