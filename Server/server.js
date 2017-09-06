@@ -58,7 +58,13 @@ app.get('/data', function (req, res) {
   end.setMinutes(0);
   end.setSeconds(0);
   */
-  start.setDate(1);
+  start.setHours(0);
+  start.setMinutes(0);
+  start.setSeconds(0);
+
+  end.setHours(23);
+  end.setMinutes(59);
+  end.setSeconds(59);
  
   Device.find({}, function(err, deviceList) {
      if(err) res.status(500).send("Internal error: " + err);
@@ -142,7 +148,7 @@ function resetNode() {
                     host: url,
                     path: "/reset"
                   };
-    http.get(options, function (response) {
+    var request = http.get(options, function (response) {
         var data = "";
         response.on("data", function (chunk) {
             data += chunk;
@@ -150,8 +156,18 @@ function resetNode() {
 
         response.on("end", function () {
             console.log("URL: [" + url + "] Response: " + data);
+            if (data.toUpperCase().trim() != "SUCCESS") {
+                console.log("   FAILED [" + url + "], SEARCHING AGAIN");
+                deviceQueue.push(url);
+            }
             resetNode();
         });
+    });
+
+    request.on('error', function (e) {
+        console.log("   FAILED [" + url + "], SEARCHING AGAIN. ERROR: [" + e + "]");
+        deviceQueue.push(url);
+        setTimeout(function() { resetNode(); }, 2000);
     });
 }
 
