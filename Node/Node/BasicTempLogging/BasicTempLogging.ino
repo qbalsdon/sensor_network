@@ -117,7 +117,7 @@ void updateAverage(float temperature) {
 }
 
 void loop() {
-  float temperature;
+  float temperature = getTemperature();
   updateAverage(temperature);
   Serial.println("T: " + String(temperature) + " A:" + String(average));
   delay(250); 

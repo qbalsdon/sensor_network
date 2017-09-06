@@ -7,7 +7,7 @@
 
 #include "constants.h"
 
-#define DS18S20_Pin D8
+#define DS18S20_Pin D3
 #define BLUE_PIN D6
 #define GREEN_PIN D5
 #define RED_PIN D4
@@ -274,6 +274,7 @@ void registerDevice(String deviceMacAddress, String ipAddress) {
 }
 
 void updateAverage(float temperature) {
+  if (temperature < -125 || temperature > 125) return;
   count = (count % INT_MAX) + 1;
   average -= average / count;
   average += temperature / count;
