@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>Line Chart</title>
+    <title>Camlin Temperature Network</title>
     <script src="scripts/Chart.bundle.js"></script>
     <script src="scripts/utils.js"></script>
     <script language="javascript">
@@ -38,7 +38,10 @@
     function parseReportData(response) {
         var dataSetArray = [];
         var labelArray = [];
-        if (response == null || response.data == null || response.data.length == 0) return;
+        if (response == null || response.data == null || response.data.length == 0) {
+            alert("No data");
+            return;
+        }
         var colour = getColour(response, response.data[0].mac);
         updateControls(response.devices);
         dataSetArray.push({label: "Sensor 1", backGroundColor: colour, borderColor: colour, data: [], fill: false}); 
@@ -57,7 +60,7 @@
                date.setTime(Date.parse(response.data[i].timeStamp));
 
                var min = date.getUTCMinutes();
-               var hour = date.getUTCHours();
+               var hour = date.getUTCHours() + 1;
                labelArray.push(pad(hour) + ":" + pad(min));
            } 
            dataSetArray[currentIndex].data.push(response.data[i].temperature);
@@ -159,6 +162,7 @@
         };
 
         var ctx = document.getElementById("canvas").getContext("2d");
+        if (window.myLine != null) window.myLine.destroy();
         window.myLine = new Chart(ctx, config);
     }
     </script>

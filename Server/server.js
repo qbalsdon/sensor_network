@@ -8,7 +8,8 @@ const C_DEVICE = "DEVICES";
 const C_TEMPERATURE = "TEMPERATURE";
 const NUM_NODES = 2;
 const CLEAR_TIMEOUT = 5000;
-const READ_TIMEOUT = 30000;//120000;
+const READ_TIMEOUT = 120000;
+const ERROR_REFRESH = 2000;
 
 const COLOURS = ["e6194b", "3cb44b", "ffe119", "0082c8", "f58231", "911eb4", "46f0f0", "d2f53c", "fabebe", "e6beff"];
 
@@ -41,23 +42,39 @@ var temperatureSchema = mongoose.Schema({
 var Temperature = mongoose.model('Temperature', temperatureSchema);
 
 var deviceQueue = [];
+var dataQueue = [];
 var timeStamp;
 
+function getServerIP() {
+
+  var os = require('os');
+  var ifaces = os.networkInterfaces();
+  var values = Object.keys(ifaces).map(function(name) {
+    return ifaces[name];
+  });
+  values = [].concat.apply([], values).filter(function(val) {
+    return val.family == 'IPv4' && val.internal == false;
+  });
+
+  return values.length ? values[0].address : '0.0.0.0';
+}
+
 app.get('/', function(req, res) {
+    console.log("Index request");
     res.sendFile('index.html', {root: __dirname })
 });
 
 app.get('/data', function (req, res) {
   var start = new Date();
   var end = new Date();
-  /*start.setHours(7);
+  start.setHours(6);
   start.setMinutes(30);
   start.setSeconds(0);
 
-  end.setHours(18);
+  end.setHours(17);
   end.setMinutes(0);
   end.setSeconds(0);
-  */
+  /*
   start.setHours(0);
   start.setMinutes(0);
   start.setSeconds(0);
@@ -65,7 +82,7 @@ app.get('/data', function (req, res) {
   end.setHours(23);
   end.setMinutes(59);
   end.setSeconds(59);
- 
+  */ 
   Device.find({}, function(err, deviceList) {
      if(err) res.status(500).send("Internal error: " + err);
      else {
@@ -85,14 +102,14 @@ app.get('/data', function (req, res) {
 });
 
 app.get('/clear', function (req, res) {
-  /*
+  
   Temperature.remove({}, function(err) {
    console.log("Temp cleared!");
   });
   Device.remove({}, function(err) {
    res.status(202).send("You called it");
   });
- */
+ 
 });
 
 app.get('/register', function (req, res) {
@@ -165,15 +182,17 @@ function resetNode() {
     });
 
     request.on('error', function (e) {
-        console.log("   FAILED [" + url + "], SEARCHING AGAIN. ERROR: [" + e + "]");
+        console.log("   RESET FAILED [" + url + "], SEARCHING AGAIN. ERROR: [" + e + "]");
         deviceQueue.push(url);
-        setTimeout(function() { resetNode(); }, 2000);
+        setTimeout(function() { resetNode(); }, ERROR_REFRESH);
     });
 }
 
 function readAllTemperatures() {
     console.log("Reading temperatures");
     timeStamp = new Date();
+    deviceQueue = [];
+    dataQueue = [];
     Device.find({}, function(err, deviceList) {
         for(var i = 0; i < deviceList.length; i++) {
             deviceQueue.push(deviceList[i].ip);
@@ -184,6 +203,7 @@ function readAllTemperatures() {
 
 function readNode() {
     if (deviceQueue.length == 0) {
+        saveElements();
         setTimeout(readAllTemperatures, READ_TIMEOUT);
         return;
     }
@@ -193,35 +213,44 @@ function readNode() {
                     host: url,
                     path: "/average"
                   };
-    http.get(options, function (response) {
+
+    var request = http.get(options, function (response) {
         var data = "";
         response.on("data", function (chunk) {
             data += chunk;
         });
 
         response.on("end", function () {
-            saveElement(JSON.parse(data));
+            dataQueue.push(JSON.parse(data));
             console.log("URL: [" + url + "] Average temperature: " + data);
             readNode();
         });
     });
-}
-
-function saveElement(dataPoint) {
-    dataPoint.timeStamp = timeStamp;
-    console.log("        Saving: " + JSON.stringify(dataPoint));
-    var temperature = new Temperature({ mac: dataPoint.mac, temperature: dataPoint.average, timeStamp: dataPoint.timeStamp });
-    temperature.save(function (err, deviceInstance) {
-      if (err) {
-        console.error("Save temperature error: " + err);
-        return;
-      }
-      console.log("        Saved!");
+ 
+    request.on('error', function (e) {
+        console.log("   READ FAILED [" + url + "], TRYING AGAIN. ERROR: [" + e + "]");
+        setTimeout(function() { readAllTemperatures(); }, ERROR_REFRESH);
     });
 }
 
-app.listen(3000, function () {
-  console.log('Server started on port 3000!');
+function saveElements() {
+    for (var i = 0; i < dataQueue.length; i++) {
+        var dataPoint = dataQueue[i];
+        dataPoint.timeStamp = timeStamp;
+        var temperature = new Temperature({ mac: dataPoint.mac, temperature: dataPoint.average, timeStamp: dataPoint.timeStamp });
+        temperature.save(function (err, deviceInstance) {
+            if (err) {
+                console.error("Save temperature error: " + err);
+                return;
+            }
+            console.log("        Saved: " + JSON.stringify(dataPoint));
+        });
+    }
+}
+
+var server = app.listen(3000, function () {
+  var port = server.address().port;
+  console.log("Server started: http://%s:%s", getServerIP(), port);
   /*
   Device.remove({}, function(err) {
    console.log("DB devices cleared");
