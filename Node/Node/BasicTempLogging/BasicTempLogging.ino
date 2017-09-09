@@ -9,7 +9,11 @@
 #define COLOUR_COUNT 10
 #define INT_MAX 214748364
 
-String colour = "ffe119";
+String red = "990000";
+String green = "009900";
+String blue = "000099";
+String colour = red;
+
 long count;
 double average;
 String macAddr;
@@ -120,6 +124,12 @@ void loop() {
   float temperature = getTemperature();
   updateAverage(temperature);
   Serial.println("T: " + String(temperature) + " A:" + String(average));
+
+  if (colour == red) colour = blue;
+  else if (colour == blue) colour = green;
+  else if (colour == green) colour = red;
+  
+  setColour(colour);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
   delay(250); 
 }
 
