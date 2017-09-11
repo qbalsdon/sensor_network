@@ -8,11 +8,14 @@
     <script language="javascript">
 
     const COLOURS = ["#e6194b", "#3cb44b", "#ffe119", "#0082c8", "#f58231", "#911eb4", "#46f0f0", "#d2f53c", "#fabebe", "#e6beff"];
-
-    function loadData() {
+    function getUrl() {
         var url = window.location.href;
         var arr = url.split("/");
-        var ipStr = arr[0] + "//" + arr[2];
+        return arr[0] + "//" + arr[2];
+    }
+        
+    function loadData() {
+        var ipStr = getUrl();
         var xhttp = new XMLHttpRequest();
 
         xhttp.onreadystatechange = function() {
@@ -79,7 +82,7 @@
            list += "<a onclick='blink(\""+device.ip + "\", \"" + device.mac + "\");'>";
            list += "<img id=img_"+device.mac+" src='images/thermometer.png' style = 'width:" + size + "px; height: " + size + "px; background: " + COLOURS[deviceList[i].colourIndex] + "; -moz-border-radius: " + (size / divisor) + "px; -webkit-border-radius: " + (size / divisor) + "px; border-radius: 70px;'>";
            list += "</a>";
-           list += "</td></td><td><p id=temp_"+deviceList[i].mac+">--</p></td></tr>" ;
+           list += "</td><td><a onclick='loadFiveDayData(" + JSON.stringify(deviceList[i]) + ");'><p id=temp_"+deviceList[i].mac+">--</p></a></td></tr>" ;
            setupForNode(device, i);
         }
         list += "</table>";
@@ -91,7 +94,7 @@
             updateTemperatureNode(node);
         }, i * 1000);
     }
-
+   
     function updateTemperatureNode(node) {
         var xhttpTemp = new XMLHttpRequest();
 
@@ -104,6 +107,114 @@
         xhttpTemp.open("GET", "http://" + node.ip + "/temperature", true);
         xhttpTemp.send();
     }
+
+    //Loading 5 day chart
+    function loadFiveDayData(device) {
+        var ipStr = getUrl();
+        var xhttp = new XMLHttpRequest();
+
+        xhttp.onreadystatechange = function() {
+            if (this.readyState == 4 && this.status >= 200 && this.status < 300) {
+                parseFiveDayReportData(JSON.parse(this.responseText));
+            }
+        };
+        xhttp.open("GET", ipStr + "/data/" + device.mac, true);
+        xhttp.send();
+       
+       var size = 56;
+       var divisor = 2;
+       var list = "<table>";
+       list += "<tr><td>";
+       list += "<a onclick='blink(\""+device.ip + "\", \"" + device.mac + "\");'>";
+       list += "<img id=img_"+device.mac+" src='images/thermometer.png' style = 'width:" + size + "px; height: " + size + "px; background: " + COLOURS[device.colourIndex] + "; -moz-border-radius: " + (size / divisor) + "px; -webkit-border-radius: " + (size / divisor) + "px; border-radius: 70px;'>";
+       list += "</a>";
+       list += "</td><td><p id=temp_"+device.mac+">--</p></td></tr>" ;
+       list += "</table>";
+       setupForNode(device, 1);
+       document.getElementById("control").innerHTML = list;
+    }
+
+    function getDate(timeStamp) {
+        var ts = new Date(Date.parse(timeStamp)); 
+        return (1900 + ts.getYear()) + "-" + pad(ts.getMonth()) + "-" + pad(ts.getDate());
+    }
+    
+    function getMinuteLabel(timeStamp) {
+             var ts = new Date(Date.parse(timeStamp));
+             return pad(ts.getUTCHours()) + ":" + pad(ts.getMinutes());
+    }
+
+    function parseFiveDayReportData(response) {
+        var dataSetArray = [];
+        var labelArray = [];
+        if (response == null || response.data == null || response.data.length == 0) {
+            alert("No data");
+            return;
+        }
+        var currentDate = getDate(response.data[0].timeStamp);
+        dataSetArray.push({label: currentDate, backGroundColor: COLOURS[0], borderColor: COLOURS[0], data: [], fill: false});
+        var currentIndex = 0;
+        for (var i = 0; i < response.data.length; i++) {
+           if (currentDate != getDate(response.data[i].timeStamp)) {
+              currentIndex++;
+              currentDate = getDate(response.data[i].timeStamp);
+              dataSetArray.push({label: currentDate, backGroundColor: COLOURS[currentIndex], borderColor: COLOURS[currentIndex], data: [], fill: false});
+           }
+
+           dataSetArray[currentIndex].data.push(response.data[i].temperature);
+           if (currentIndex == 0) {
+               labelArray.push(getMinuteLabel(response.data[i].timeStamp));
+           }
+        }
+        updateChart("5 Day Temperature", labelArray, dataSetArray);
+    }
+
+    function updateFiveDayChart(titleText, dataSetArray) {
+        var config = {
+            type: 'line',
+            data: {
+                datasets: dataSetArray
+            },
+            options: {
+                responsive: true,
+                title:{
+                    display:true,
+                    text: titleText
+                },
+                tooltips: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                hover: {
+                    mode: 'nearest',
+                    intersect: true
+                },
+                scales: {
+                    xAxes: [{
+                        display: true,
+                        scaleLabel: {
+                            display: true,
+                            labelString: 'Time'
+                        }
+                    }],
+                    yAxes: [{
+                        display: true,
+                        scaleLabel: {
+                            display: true,
+                            labelString: 'Temperature ºc'
+                        }
+                    }]
+                }
+            }
+        };
+
+        var ctx = document.getElementById("canvas").getContext("2d");
+        if (window.myLine != null) window.myLine.destroy();
+        window.myLine = new Chart(ctx, config);
+    }
+
+
+    //end loading 5 day chart
 
     var flip = true;
     function blink(ip, mac) {

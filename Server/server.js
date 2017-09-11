@@ -6,9 +6,9 @@ const mongoose = require('mongoose');
 
 const C_DEVICE = "DEVICES";
 const C_TEMPERATURE = "TEMPERATURE";
-const NUM_NODES = 2;
+const NUM_NODES = 4;
 const CLEAR_TIMEOUT = 5000;
-const READ_TIMEOUT = 120000;
+const READ_TIMEOUT = 300000;
 const ERROR_REFRESH = 2000;
 
 const COLOURS = ["e6194b", "3cb44b", "ffe119", "0082c8", "f58231", "911eb4", "46f0f0", "d2f53c", "fabebe", "e6beff"];
@@ -67,22 +67,9 @@ app.get('/', function(req, res) {
 app.get('/data', function (req, res) {
   var start = new Date();
   var end = new Date();
-  start.setHours(6);
-  start.setMinutes(30);
-  start.setSeconds(0);
 
-  end.setHours(17);
-  end.setMinutes(0);
-  end.setSeconds(0);
-  /*
-  start.setHours(0);
-  start.setMinutes(0);
-  start.setSeconds(0);
+  start.setHours(start.getHours() - 8);
 
-  end.setHours(23);
-  end.setMinutes(59);
-  end.setSeconds(59);
-  */ 
   Device.find({}, function(err, deviceList) {
      if(err) res.status(500).send("Internal error: " + err);
      else {
@@ -100,6 +87,28 @@ app.get('/data', function (req, res) {
      }
   });
 });
+
+app.get('/data/:mac', function (req, res) {
+  var start = new Date();
+  var end = new Date();
+
+  start.setDate(start.getDate() - 5);
+  start.setHours(7);
+  start.setMinutes(30);
+
+  Temperature
+     .find({mac : new RegExp(req.params.mac)})
+     .where('timeStamp').gte(start).lte(end)
+     .sort({timeStamp:1})
+     .exec(
+        function(err, dataList) {
+          if (err) res.status(500).send("Internal error: " + err);
+          else {
+              res.status(200).send({data: dataList});
+          }
+        });
+});
+
 
 app.get('/clear', function (req, res) {
   
@@ -156,7 +165,20 @@ function resetAllTemperatures() {
 
 function resetNode() {
     if (deviceQueue.length == 0) {
-        setTimeout(readAllTemperatures, READ_TIMEOUT);
+        var date = new Date();
+        var diff = Math.ceil(date.getMinutes()/5)*5;
+        var nDate = new Date();
+        nDate.setMinutes(diff);
+        nDate.setSeconds(0);
+        nDate.setMilliseconds(0);
+
+        var timeOut = nDate.getTime() - date.getTime(); 
+        if (timeOut < 0) {
+            timeOut = READ_TIMEOUT + timeOut;
+            nDate.setMilliseconds(nDate.getMilliseconds() + READ_TIMEOUT);
+        }
+        console.log("Waiting " + timeOut + " millis until " + JSON.stringify(nDate));
+        setTimeout(readAllTemperatures, timeOut);
         return;
     }
     var url = deviceQueue.pop();
@@ -191,6 +213,8 @@ function resetNode() {
 function readAllTemperatures() {
     console.log("Reading temperatures");
     timeStamp = new Date();
+    timeStamp.setSeconds(0);
+    timeStamp.setMilliseconds(0);
     deviceQueue = [];
     dataQueue = [];
     Device.find({}, function(err, deviceList) {
@@ -238,12 +262,12 @@ function saveElements() {
         var dataPoint = dataQueue[i];
         dataPoint.timeStamp = timeStamp;
         var temperature = new Temperature({ mac: dataPoint.mac, temperature: dataPoint.average, timeStamp: dataPoint.timeStamp });
-        temperature.save(function (err, deviceInstance) {
+        temperature.save(function (err, tempInstance) {
             if (err) {
                 console.error("Save temperature error: " + err);
                 return;
             }
-            console.log("        Saved: " + JSON.stringify(dataPoint));
+            console.log("        Saved: " + JSON.stringify(tempInstance));
         });
     }
 }
