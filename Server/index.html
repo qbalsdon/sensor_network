@@ -51,6 +51,8 @@
         var currentIndex = 0;
         var currentMac = response.data[0].mac;
         for (var i = 0; i < response.data.length; i++) {
+           var testDate = new Date(Date.parse(response.data[i].timeStamp));
+           if (testDate.getHours() < 8 || testDate.getHours() > 17) continue;
            if (response.data[i].mac != currentMac) {
               currentIndex++;
               currentMac = response.data[i].mac;
@@ -155,6 +157,8 @@
         dataSetArray.push({label: currentDate, backGroundColor: COLOURS[0], borderColor: COLOURS[0], data: [], fill: false});
         var currentIndex = 0;
         for (var i = 0; i < response.data.length; i++) {
+           var testDate = new Date(Date.parse(response.data[i].timeStamp));
+           if (testDate.getHours() > 17) continue;
            if (currentDate != getDate(response.data[i].timeStamp)) {
               currentIndex++;
               currentDate = getDate(response.data[i].timeStamp);
