@@ -158,7 +158,7 @@
         var currentIndex = 0;
         for (var i = 0; i < response.data.length; i++) {
            var testDate = new Date(Date.parse(response.data[i].timeStamp));
-           if (testDate.getHours() > 17) continue;
+           if (testDate.getHours() < 8 || testDate.getHours() > 17) continue;
            if (currentDate != getDate(response.data[i].timeStamp)) {
               currentIndex++;
               currentDate = getDate(response.data[i].timeStamp);
