@@ -19,6 +19,7 @@ mongoose.connect(url);
 var app = express();
 app.use("/images", express.static(__dirname + '/images'));
 app.use("/scripts", express.static(__dirname + '/scripts'));
+app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended: true}));
 
 var db = mongoose.connection;
@@ -30,7 +31,9 @@ db.once('open', function() {
 var deviceSchema = mongoose.Schema({
     mac: String,
     ip: String,
-    colourIndex: Number
+    colourIndex: Number,
+    pos: { x: Number, y: Number},
+    name: String
 });
 var Device = mongoose.model('Device', deviceSchema);
 
@@ -62,6 +65,11 @@ function getServerIP() {
 app.get('/', function(req, res) {
     console.log("Index request");
     res.sendFile('index.html', {root: __dirname })
+});
+
+app.get('/heatmap', function(req, res) {
+    console.log("Heatmap request");
+    res.sendFile('heatmap.html', {root: __dirname })
 });
 
 app.get('/data', function (req, res) {
@@ -109,16 +117,44 @@ app.get('/data/:mac', function (req, res) {
         });
 });
 
+app.get('/devices', function (req, res) {
+  var start = new Date();
+  var end = new Date();
+
+  start.setHours(start.getHours() - 8);
+
+  Device.find({}, function(err, deviceList) {
+     if(err) res.status(500).send("Internal error: " + err);
+     else {
+         if (err) res.status(500).send("Internal error: " + err);
+         else {
+            res.status(200).send(deviceList);
+         }
+     }
+  });
+});
+
+app.post('/device', function (req, res) {
+  console.log(req.body.mac + " updated: " + JSON.stringify(req.body));
+  Device.update({'mac':new RegExp(req.body.mac)}, {'$set': req.body}, function (err) {  
+      if(err) {
+          res.status(500).send("Internal error: " + err);
+          console.log(err);
+      } else {
+        res.status(200).send('Success');
+      }
+  });
+});
 
 app.get('/clear', function (req, res) {
   
-  Temperature.remove({}, function(err) {
+/*  Temperature.remove({}, function(err) {
    console.log("Temp cleared!");
   });
   Device.remove({}, function(err) {
    res.status(202).send("You called it");
   });
- 
+*/ 
 });
 
 app.get('/register', function (req, res) {
@@ -142,7 +178,15 @@ app.get('/register', function (req, res) {
         });
       });
     } else {
-      res.status(202).send(COLOURS[deviceList[0].colourIndex]);
+      console.log("Updating IP");
+      Device.update({'mac':new RegExp(req.query.mac)}, {'ip': req.query.ip}, function (err) {
+          if(err) {
+             res.status(500).send("Internal error: " + err);
+             console.log(err);
+          } else {
+             res.status(202).send(COLOURS[deviceList[0].colourIndex]);
+          }
+      });
       console.log("  Colour index: %s", deviceList[0].colourIndex); 
     }
   });
@@ -163,21 +207,26 @@ function resetAllTemperatures() {
     });
 }
 
+function getNextTimeout() {
+    var date = new Date();
+    var diff = Math.ceil(date.getMinutes()/5)*5;
+    var nDate = new Date();
+    nDate.setMinutes(diff);
+    nDate.setSeconds(0);
+    nDate.setMilliseconds(0);
+
+    var timeOut = nDate.getTime() - date.getTime();
+    if (timeOut < 0) {
+        timeOut = READ_TIMEOUT + timeOut;
+        nDate.setMilliseconds(nDate.getMilliseconds() + READ_TIMEOUT);
+    }
+    return timeOut;
+}
+
 function resetNode() {
     if (deviceQueue.length == 0) {
-        var date = new Date();
-        var diff = Math.ceil(date.getMinutes()/5)*5;
-        var nDate = new Date();
-        nDate.setMinutes(diff);
-        nDate.setSeconds(0);
-        nDate.setMilliseconds(0);
-
-        var timeOut = nDate.getTime() - date.getTime(); 
-        if (timeOut < 0) {
-            timeOut = READ_TIMEOUT + timeOut;
-            nDate.setMilliseconds(nDate.getMilliseconds() + READ_TIMEOUT);
-        }
-        console.log("Waiting " + timeOut + " millis until " + JSON.stringify(nDate));
+        var timeOut = getNextTimeout(); 
+        console.log("Waiting " + timeOut + " millis ");
         setTimeout(readAllTemperatures, timeOut);
         return;
     }
@@ -228,7 +277,7 @@ function readAllTemperatures() {
 function readNode() {
     if (deviceQueue.length == 0) {
         saveElements();
-        setTimeout(readAllTemperatures, READ_TIMEOUT);
+        setTimeout(readAllTemperatures, getNextTimeout());
         return;
     }
     var url = deviceQueue.pop();

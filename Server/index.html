@@ -47,7 +47,7 @@
         }
         var colour = getColour(response, response.data[0].mac);
         updateControls(response.devices);
-        dataSetArray.push({label: "Sensor 1", backGroundColor: colour, borderColor: colour, data: [], fill: false}); 
+        dataSetArray.push({label: getDeviceName(response.devices[0]), backGroundColor: colour, borderColor: colour, data: [], fill: false}); 
         var currentIndex = 0;
         var currentMac = response.data[0].mac;
         for (var i = 0; i < response.data.length; i++) {
@@ -57,7 +57,7 @@
               currentIndex++;
               currentMac = response.data[i].mac;
               colour = getColour(response, currentMac);
-              dataSetArray.push({label: "Sensor " + (currentIndex + 1), backGroundColor: colour, borderColor: colour, data: [], fill: false});
+              dataSetArray.push({label: getDeviceName(response.devices[currentIndex]), backGroundColor: colour, borderColor: colour, data: [], fill: false});
            }
 
            if (currentIndex == 0) {
@@ -83,8 +83,10 @@
            list += "<tr><td>";
            list += "<a onclick='blink(\""+device.ip + "\", \"" + device.mac + "\");'>";
            list += "<img id=img_"+device.mac+" src='images/thermometer.png' style = 'width:" + size + "px; height: " + size + "px; background: " + COLOURS[deviceList[i].colourIndex] + "; -moz-border-radius: " + (size / divisor) + "px; -webkit-border-radius: " + (size / divisor) + "px; border-radius: 70px;'>";
-           list += "</a>";
-           list += "</td><td><a onclick='loadFiveDayData(" + JSON.stringify(deviceList[i]) + ");'><p id=temp_"+deviceList[i].mac+">--</p></a></td></tr>" ;
+           list += "</a></td>";
+           list += "<td><a onclick='changeName(" + JSON.stringify(deviceList[i])  + ");'>" + getDeviceName(deviceList[i]) + "</a></td>";
+           list += "<td><a onclick='loadFiveDayData(" + JSON.stringify(deviceList[i]) + ");'><p id=temp_"+deviceList[i].mac+">--</p></a></td>";
+           list += "</tr>" ;
            setupForNode(device, i);
         }
         list += "</table>";
@@ -279,6 +281,47 @@
         var ctx = document.getElementById("canvas").getContext("2d");
         if (window.myLine != null) window.myLine.destroy();
         window.myLine = new Chart(ctx, config);
+    }
+
+    function changeName(device) {
+        var box = prompt("Please type a name for the device", "Lee's desk");
+
+        if (box == null || box == "") {
+            return; 
+        } else {
+            device.name = box;
+            saveDevice(device);
+        }
+    }
+
+    function saveDevice(device) {
+        delete device._id;
+        console.log(getUrl()+"/device");
+        console.log(JSON.stringify(device));
+
+        var http = new XMLHttpRequest();
+        http.open("POST", getUrl()+"/device", true);
+
+        //Send the proper header information along with the request
+        http.setRequestHeader("Content-type", "application/json");
+
+        http.onreadystatechange = function() {//Call a function when the state changes.
+            if(http.readyState == 4 && http.status == 200) {
+                console.log("Success");
+                reloadPage();
+            }
+        }
+        http.send(JSON.stringify(device));
+    }
+    
+    function getDeviceName(device) {
+        //alert(JSON.stringify(device));
+        if (device.name) return device.name;
+        else return device.mac;
+    }
+
+    function reloadPage() {
+        window.location.reload();
     }
     </script>
     <style>

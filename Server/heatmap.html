@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Heat map</title>
+    <style>
+        body { text-align: center; font: 16px/1.4 "Helvetica Neue", Arial, sans-serif; }
+        a { color: #0077ff; }
+        .container { width: 1000px; height: 600px; margin: 0 auto; position: relative; border: 1px solid #ccc; }
+        .options { position: absolute; top: 0; right: 0; padding: 10px; background: rgba(255,255,255,0.6);
+            border-bottom: 1px solid #ccc; border-left: 1px solid #ccc; line-height: 1; }
+        .options input { width: 200px; }
+        .options label { width: 60px; float: left; text-align: right; margin-right: 10px; color: #555; }
+        .ghbtns { position: relative; top: 4px; margin-left: 5px; }
+
+        .layout { 
+            position: absolute; 
+            overflow: hidden; 
+            background-image: url('../images/pod.png'); 
+            background-repeat: no-repeat; 
+            background-position: center; 
+            background-size: contain; 
+            top: 0; right: 0;  
+            width:100%; 
+            height:100%; 
+            z-index: -1; 
+        }
+        .info {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            margin-top: -150px;
+            margin-left: -150px;
+            width: 300px;
+            height: 300px;
+            background: rgba(255, 255, 255, 0.86);
+        }
+
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="layout">
+    </div>
+    <canvas id="canvas" width="1000" height="600" style="position:absolute;top:0;left:0;"></canvas>
+    <canvas id="labels" width="1000" height="600" style="position:absolute;top:0;left:0;"></canvas>
+</div>
+
+<div class="info" id="menu">Hi there!</div>
+
+<script src="scripts/simpleheat.js"></script>
+<script>
+const COLOURS = ["#e6194b", "#3cb44b", "#ffe119", "#0082c8", "#f58231", "#911eb4", "#46f0f0", "#d2f53c", "#fabebe", "#e6beff"];
+const FORE_COLOURS = ["#ffffff", "#ffffff", "#000000", "#ffffff", "#ffffff", "#ffffff", "#000000", "#000000", "#000000", "#000000"];
+var data = [];
+var devices = [];
+var menu;
+var currentClick;
+
+window.requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame ||
+                               window.webkitRequestAnimationFrame || window.msRequestAnimationFrame;
+function get(id) {
+    return document.getElementById(id);
+}
+var heat = simpleheat('canvas').data(data).max(25),
+    frame;
+heat.radius(80, 50);
+
+function draw() {
+    console.time('draw');
+    heat.draw();
+    console.timeEnd('draw');
+    frame = null;
+}
+
+function onClick(e) {
+    currentClick = e;
+    menu.style.visibility = "visible";
+};
+
+function getUrl() {
+    var url = window.location.href;
+    var arr = url.split("/");
+    return arr[0] + "//" + arr[2];
+}
+
+function getDeviceName(device) {
+    if (device.name) return device.name;
+    else return device.mac;
+}
+
+function map(value, low1, high1, low2, high2) {
+    return low2 + (high2 - low2) * (value - low1) / (high1 - low1);
+}
+
+function updateTemperatureNode(device) {
+    var xhttpTemp = new XMLHttpRequest();
+
+    xhttpTemp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status >= 200 && this.status < 300) {
+            var mappedValue = map(JSON.parse(this.responseText).temperature, 15, 30, 10, 25);
+            //alert(device.pos.x + ":" + device.pos.y + " - " + JSON.parse(this.responseText).temperature + " = " + mappedValue);
+            heat.add([device.pos.x, device.pos.y, mappedValue]);
+            heat.drawCircle(device.pos.x, device.pos.y, device.colourIndex);
+            frame = frame || window.requestAnimationFrame(draw);
+            drawLabels(device.pos.x, device.pos.y, 25, getDeviceName(device), JSON.parse(this.responseText).temperature, device.colourIndex);
+
+        }
+    };
+    xhttpTemp.open("GET", "http://" + device.ip + "/temperature", true);
+    xhttpTemp.send();
+}
+
+function loadData() {
+    var ipStr = getUrl();
+    var xhttp = new XMLHttpRequest();
+    var currentDevice = 0;
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status >= 200 && this.status < 300) {
+            devices = JSON.parse(this.responseText);
+            menu.innerHTML = "<h3>Select a device</h3><ul style=\"text-align:'left'; margin:0; padding:0;\">";
+            for (var i = 0; i < devices.length; i++ ){
+               menu.innerHTML += "<li><span style=\"background-color:"+COLOURS[devices[i].colourIndex]+";\" onclick=\"selectDevice('" + i + "');\">" + getDeviceName(devices[i]) + "</span></li>";
+               if (devices[i].pos) {
+                   setTimeout(updateTemperatureNode(devices[i]), currentDevice * 500);
+                   currentDevice++;
+               }
+            } 
+            menu.innerHTML += "</ul>";
+        }
+    };
+    xhttp.open("GET", ipStr + "/devices", true);
+    xhttp.send();
+}
+
+function saveDevice(device) {
+    delete device._id;
+    console.log(getUrl()+"/device");
+    console.log(JSON.stringify(device));
+
+    var http = new XMLHttpRequest();
+    http.open("POST", getUrl()+"/device", true);
+
+    //Send the proper header information along with the request
+    http.setRequestHeader("Content-type", "application/json");
+
+    http.onreadystatechange = function() {//Call a function when the state changes.
+        if(http.readyState == 4 && http.status == 200) {
+            console.log("Success");
+            location.relaod();
+        }
+    }
+   
+    http.send(JSON.stringify(device));
+}
+
+function selectDevice(deviceIndex) {
+    devices[deviceIndex].pos = {x: currentClick.layerX, y: currentClick.layerY};
+    saveDevice(devices[deviceIndex]);
+    menu.style.visibility = 'hidden';
+}
+
+function drawLabels(x, y, radius, label, text, colourIndex) {
+    var canvas = document.getElementById('labels');
+    var context = canvas.getContext('2d');
+    var centerX = x;
+    var centerY = y;
+    var radius = radius;
+
+    context.beginPath();
+    context.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
+    context.fillStyle = COLOURS[colourIndex];
+    context.fill();
+    context.lineWidth = 2;
+    context.strokeStyle = '#003300';
+    context.stroke();
+
+    context.fillStyle="black";
+    context.font="15px Arial"; 
+    context.textAlign="center"; 
+    context.fillText(label,x, y + radius + 20); 
+
+    context.fillStyle=FORE_COLOURS[colourIndex];
+    context.font="15px Arial"; 
+    context.textAlign="center";
+    context.fillText(text,x, y + 6.5); 
+}
+
+menu = get('menu');
+menu.style.visibility = 'hidden';
+draw();
+get('canvas').addEventListener("click", onClick, false);
+loadData();
+
+window.addEventListener('keydown', function(e){
+    if((e.key=='Escape'||e.key=='Esc'||e.keyCode==27) && (e.target.nodeName=='BODY')){
+        menu.style.visibility = 'hidden';
+        return false;
+    }
+}, true);
+</script>
+</body>
+</html>
