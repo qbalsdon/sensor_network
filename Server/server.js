@@ -76,7 +76,14 @@ app.get('/data', function (req, res) {
   var start = new Date();
   var end = new Date();
 
-  start.setHours(start.getHours() - 8);
+  start.setHours(8);
+  start.setMinutes(0);
+  start.setSeconds(0);
+  start.setMilliseconds(0);
+
+  end.setHours(18);
+  end.setMinutes(0);
+  end.setMilliseconds(0);
 
   Device.find({}, function(err, deviceList) {
      if(err) res.status(500).send("Internal error: " + err);

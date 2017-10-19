@@ -56,7 +56,7 @@
            if (response.data[i].mac != currentMac) {
               currentIndex++;
               currentMac = response.data[i].mac;
-              colour = getColour(response, currentMac);
+              colour = COLOURS[response.devices[currentIndex].colourIndex];
               dataSetArray.push({label: getDeviceName(response.devices[currentIndex]), backGroundColor: colour, borderColor: colour, data: [], fill: false});
            }
 
