@@ -45,32 +45,25 @@
             alert("No data");
             return;
         }
-        var colour = getColour(response, response.data[0].mac);
         updateControls(response.devices);
-        dataSetArray.push({label: getDeviceName(response.devices[0]), backGroundColor: colour, borderColor: colour, data: [], fill: false}); 
-        var currentIndex = 0;
-        var currentMac = response.data[0].mac;
-        for (var i = 0; i < response.data.length; i++) {
-           var testDate = new Date(Date.parse(response.data[i].timeStamp));
-           if (testDate.getHours() < 8 || testDate.getHours() > 17) continue;
-           if (response.data[i].mac != currentMac) {
-              currentIndex++;
-              currentMac = response.data[i].mac;
-              colour = COLOURS[response.devices[currentIndex].colourIndex];
-              dataSetArray.push({label: getDeviceName(response.devices[currentIndex]), backGroundColor: colour, borderColor: colour, data: [], fill: false});
-           }
-
-           if (currentIndex == 0) {
+        for (var i = 0; i < 4; i++) {
+            var colour = COLOURS[response.devices[i].colourIndex];
+            dataSetArray.push({label: getDeviceName(response.devices[i]), backGroundColor: colour, borderColor: colour, data: [], fill: false});
+            for (var j = 0; j < response.data.length; j++) {
+               if (response.devices[i].mac != response.data[j].mac) continue;
+               var testDate = new Date(Date.parse(response.data[j].timeStamp));
+               if (testDate.getHours() < 8 || testDate.getHours() > 17) continue;
                var date = new Date();
-               date.setTime(Date.parse(response.data[i].timeStamp));
-
-               var min = date.getUTCMinutes();
-               var hour = date.getUTCHours() + 1;
-               labelArray.push(pad(hour) + ":" + pad(min));
-           } 
-           dataSetArray[currentIndex].data.push(response.data[i].temperature);
-        } 
-        updateChart("Today's Temperature", labelArray, dataSetArray);
+               date.setTime(Date.parse(response.data[j].timeStamp));
+               if (i == 0) {
+                   var min = date.getUTCMinutes();
+                   var hour = date.getUTCHours() + 1;
+                   labelArray.push(pad(hour) + ":" + pad(min));
+               }
+               dataSetArray[i].data.push(response.data[j].temperature);
+            }
+        }
+        updateChart("Temperature", labelArray, dataSetArray);
         setTimeout(function() { loadData(); }, 120000);
     }
 

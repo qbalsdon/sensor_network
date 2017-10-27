@@ -76,8 +76,8 @@ app.get('/data', function (req, res) {
   var start = new Date();
   var end = new Date();
 
-  start.setHours(8);
-  start.setMinutes(0);
+  start.setHours(7);
+  start.setMinutes(30);
   start.setSeconds(0);
   start.setMilliseconds(0);
 
